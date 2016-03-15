@@ -22,10 +22,13 @@ import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smackx.iqregister.AccountManager;
+import org.jivesoftware.smackx.search.ReportedData;
+import org.jivesoftware.smackx.search.UserSearchManager;
+import org.jivesoftware.smackx.xdata.Form;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -102,35 +105,41 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
     }
 
     private void addStanzaListener() {
-
         conn.addAsyncStanzaListener(new StanzaListener() {
             @Override
             public void processPacket(Stanza packet) throws SmackException.NotConnectedException {
                 Log.e(TAG, "--> Presence processPacket: " + packet.toXML());
                 Presence p = (Presence) packet;
-                if (p.getType().equals(Presence.Type.subscribe)) {
-                    Log.e(TAG, "processPacket: subscribe");
-                    // 如何 接收和拒绝 ？？
-                    // 无意中查看到Roster 的 PresencePacketListener
-                    // 其中有代码
-//                    if (response != null) {
-//                        response.setTo(presence.getFrom());
-//                        connection.sendStanza(response);
-//                    }
-                    // 仿照 PresencePacketListener 逻辑实现 在接收 订阅  可以看到触发entriesAdded:函数
+                Log.e(TAG, "StanzaListener: type " + p.getType() + " mode " + p.getMode());
+                Log.e(TAG, "StanzaListener: presence " + p.toString());
+                switch (p.getType()) {
+                    case available:
+//                        presenceListener.available(p.getFrom());
+                        break;
+                    case unavailable:
+//                        presenceListener.unavailable(p.getFrom());
+                        break;
+                    case subscribe:
+                        // 如何 接收和拒绝 ？？
 
-                    presenceListener.subscribe(p);
-                } else if (p.getType().equals(Presence.Type.unsubscribe)) {
-                    Log.e(TAG, "processPacket: unsubscribe");
-                    presenceListener.unsubscribe(p.getFrom());
-                } else if (p.getType().equals(Presence.Type.subscribed)) {
-                    Log.e(TAG, "processPacket: subscribed");
-                    presenceListener.subscribed(p.getFrom());
-                } else if (p.getType().equals(Presence.Type.unsubscribed)) {
-                    Log.e(TAG, "processPacket: unsubscribed");
-                    presenceListener.unsubscribed(p.getFrom());
-                } else {
-                    Log.e(TAG, "processPacket: other");
+                        // 无意中查看到Roster 的 PresencePacketListener
+                        // 其中有代码
+                        //                    if (response != null) {
+                        //                        response.setTo(presence.getFrom());
+                        //                        connection.sendStanza(response);
+                        //                    }
+                        // 仿照 PresencePacketListener 逻辑实现 在接收 订阅  可以看到触发entriesAdded:函数
+                        presenceListener.subscribe(p);
+                        break;
+                    case unsubscribe:
+                        presenceListener.unsubscribe(p.getFrom());
+                        break;
+                    case subscribed:
+                        presenceListener.subscribed(p.getFrom());
+                        break;
+                    case unsubscribed:
+                        presenceListener.unsubscribed(p.getFrom());
+                        break;
                 }
             }
         }, new StanzaFilter() {
@@ -178,29 +187,14 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
     }
 
 
+    public Presence getPresence(String userJid) {
+        return Roster.getInstanceFor(conn).getPresence(userJid);
+    }
+
     private void addRosterListener() {
         Roster roster = Roster.getInstanceFor(conn);
         // 用户自己处理添加好友等请求
         roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
-        roster.addRosterListener(new RosterListener() {
-            // Ignored events public void entriesAdded(Collection<String> addresses) {}
-            public void entriesDeleted(Collection<String> addresses) {
-                Log.e(TAG, "entriesDeleted: ");
-            }
-
-            @Override
-            public void entriesAdded(Collection<String> addresses) {
-                Log.e(TAG, "entriesAdded: ");
-            }
-
-            public void entriesUpdated(Collection<String> addresses) {
-                Log.e(TAG, "entriesUpdated: ");
-            }
-
-            public void presenceChanged(Presence presence) {
-                Log.e(TAG, "presenceChanged: " + "Presence changed: " + presence.getFrom() + " " + presence);
-            }
-        });
     }
 
     public boolean send(final RosterEntry re, String msg) {
@@ -229,6 +223,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
     public boolean deleteRoster(RosterEntry re) {
         try {
+            Log.e(TAG, "deleteRoster: " + re.toString());
             Roster roster = Roster.getInstanceFor(conn);
             roster.removeEntry(re);
             return true;
@@ -267,8 +262,52 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
     public boolean addRoster(String userJid, String username, String[] groups) {
         // TODO: 2016/3/13 0013 先查好是否有改人。。。
         // 下面代码添加好友失败
-        Roster roster = Roster.getInstanceFor(conn);
+
+//        try {
+//            Presence presencePacket = new Presence(Presence.Type.subscribe);
+//            presencePacket.setTo(userJid + "@topviewim");
+//            conn.sendStanza(presencePacket);
+//            return true;
+//        } catch (SmackException.NotConnectedException e) {
+//            e.printStackTrace();
+//            return false;
+//        }
+
         try {
+            UserSearchManager userSearchManager = new UserSearchManager(conn);
+            Form searchForm = userSearchManager.getSearchForm("search." + conn.getServiceName());
+            Form answerForm = searchForm.createAnswerForm();
+            answerForm.setAnswer("Username", true);
+            answerForm.setAnswer("search", userJid+ "@topviewim");//Here username must be added name replace by "amith"
+
+            ReportedData resultData = userSearchManager.getSearchResults(answerForm, "search." + conn.getServiceName());
+
+
+            Iterator<ReportedData.Row> it = resultData.getRows().iterator();
+            ReportedData.Row row = null;
+            while (it.hasNext()) {
+                row = it.next();
+                String value = row.toString();
+                Log.i("It row values...", " " + value);
+            }
+
+            Iterator<ReportedData.Column> cit = resultData.getColumns().iterator();
+            ReportedData.Column c = null;
+            while (it.hasNext()) {
+                c = cit.next();
+                String value = row.toString();
+                Log.i("It column values...", " " + value);
+            }
+        } catch (SmackException.NoResponseException e) {
+            e.printStackTrace();
+        } catch (XMPPException.XMPPErrorException e) {
+            e.printStackTrace();
+        } catch (SmackException.NotConnectedException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            Roster roster = Roster.getInstanceFor(conn);
             roster.createEntry(userJid + "@topviewim", username, groups);
             return true;
         } catch (Exception e) {
@@ -285,7 +324,17 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
      * @return
      */
     public boolean deleteRoster(String userJid) {
-        return false;
+        try {
+            Log.e(TAG, "deleteRoster: " + userJid);
+            Roster r = Roster.getInstanceFor(conn);
+            RosterEntry re = r.getEntry(userJid);
+            if (re != null)
+                r.removeEntry(re);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     // TODO: 2016/3/13 0013 think image vedio file

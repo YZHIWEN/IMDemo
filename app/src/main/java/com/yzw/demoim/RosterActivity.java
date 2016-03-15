@@ -26,6 +26,7 @@ import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.roster.RosterListener;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -48,7 +49,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     private String ip = "192.168.23.1";
     private int port = 5222;
 
-    private Handler handler;
+    private H handler;
 
     private MaterialDialog progress_Dialog;
 
@@ -56,6 +57,68 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     private FriendAdapter adapter;
 
     private IMManger imManger;
+
+    public void handleMessage(Message msg) {
+        switch (msg.what) {
+            case 1:
+                Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
+                break;
+
+            case 2:
+                if (!progress_Dialog.isShowing()) {
+                    progress_Dialog.show();
+                }
+                break;
+
+            case 3:
+                if (progress_Dialog.isShowing()) {
+                    progress_Dialog.dismiss();
+                }
+                break;
+
+            case 4:
+                Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
+                break;
+            case 5:
+                adapter.notifyDataSetChanged();
+                break;
+
+            case SUBSCRIBE:
+                final Presence p = (Presence) msg.obj;
+
+
+                new MaterialDialog.Builder(RosterActivity.this)
+                        .title("好友添加请求")
+                        .positiveText("同意")
+                        .negativeText("拒绝")
+                        .onPositive(new MaterialDialog.SingleButtonCallback() {
+                            @Override
+                            public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
+                                new Thread() {
+                                    @Override
+                                    public void run() {
+                                        super.run();
+                                        imManger.agreeSubscribe(p);
+                                    }
+                                }.start();
+                            }
+                        })
+                        .onNegative(new MaterialDialog.SingleButtonCallback() {
+                            @Override
+                            public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
+                                new Thread() {
+                                    @Override
+                                    public void run() {
+                                        super.run();
+                                        imManger.disagreeSubscribe(p);
+                                    }
+                                }.start();
+                            }
+                        })
+                        .show();
+                break;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,71 +143,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 .content("请稍等")
                 .progress(true, 0).build();
 
-        handler = new Handler() {
-            @Override
-            public void handleMessage(Message msg) {
-                switch (msg.what) {
-                    case 1:
-                        Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
-                        break;
-
-                    case 2:
-                        if (!progress_Dialog.isShowing()) {
-                            progress_Dialog.show();
-                        }
-                        break;
-
-                    case 3:
-                        if (progress_Dialog.isShowing()) {
-                            progress_Dialog.dismiss();
-                        }
-                        break;
-
-                    case 4:
-                        Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
-                        break;
-                    case 5:
-                        adapter.notifyDataSetChanged();
-                        break;
-
-                    case SUBSCRIBE:
-                        final Presence p = (Presence) msg.obj;
-
-
-                        new MaterialDialog.Builder(RosterActivity.this)
-                                .title("好友添加请求")
-                                .positiveText("同意")
-                                .negativeText("拒绝")
-                                .onPositive(new MaterialDialog.SingleButtonCallback() {
-                                    @Override
-                                    public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                                        new Thread() {
-                                            @Override
-                                            public void run() {
-                                                super.run();
-                                                imManger.agreeSubscribe(p);
-                                            }
-                                        }.start();
-                                    }
-                                })
-                                .onNegative(new MaterialDialog.SingleButtonCallback() {
-                                    @Override
-                                    public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                                        new Thread() {
-                                            @Override
-                                            public void run() {
-                                                super.run();
-                                                imManger.disagreeSubscribe(p);
-                                            }
-                                        }.start();
-                                    }
-                                })
-                                .show();
-                        break;
-                }
-
-            }
-        };
+        handler = new H(this);
 
         initContacts();
 
@@ -170,6 +169,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
             @Override
             public void run() {
                 imManger = IMManger.getInstance();
+                res.clear();
                 res.addAll(imManger.getRosterEntrys());
                 Log.e(TAG, "res size " + res.size());
                 for (RosterEntry re : res) {
@@ -212,6 +212,12 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 }).show();
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.roster_menu, menu);
+        return true;
+    }
+
 //    @OnClick(R.id.send)
 //    public void send(View view) {
 //        new Thread() {
@@ -241,12 +247,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 //    }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.roster_menu, menu);
-        return true;
-    }
-
-    @Override
     public boolean onMenuItemClick(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.add_roster:
@@ -272,7 +272,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                                 EditText box = (EditText) dialog.getCustomView().findViewById(R.id.input_box);
                                 String username = box.getText().toString();
 
-                                boolean res = imManger.addRoster(username, "添加好友" + username, null);
+                                boolean res = imManger.addRoster(username, null, null);
                                 handler.sendMessage(Message.obtain(handler, 1, res));
                                 handler.sendEmptyMessage(3);
                             }
@@ -281,7 +281,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 })
                 .show();
     }
-
 
     @Override
     public void available(String user) {
@@ -320,6 +319,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     public void unsubscribed(String user) {
         handler.sendMessage(Message.obtain(handler, 4, "unsubscribed"));
         Log.e(TAG, "unsubscribed: " + user);
+        imManger.deleteRoster(user);
     }
 
     @Override
@@ -327,6 +327,8 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         Log.e(TAG, "entriesAdded: " + addresses.toString());
         initContacts();
     }
+
+    // ------------------------------
 
     @Override
     public void entriesUpdated(Collection<String> addresses) {
@@ -343,8 +345,10 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     @Override
     public void presenceChanged(Presence presence) {
         Log.e(TAG, "presenceChanged: " + presence.toString());
+        handler.sendMessage(Message.obtain(handler, 4, presence.getFrom() + " **presenceChanged** mode " + presence.getMode() + " type " + presence.getType()));
     }
 
+    // ------------------------------
     @Override
     public void receviceChat(Chat chat, final org.jivesoftware.smack.packet.Message message) {
         handler.post(new Runnable() {
@@ -357,5 +361,28 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                         .show();
             }
         });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        imManger.disConnect();
+    }
+
+    class H extends Handler {
+        private WeakReference<RosterActivity> wa;
+
+        public H(RosterActivity a) {
+            this.wa = new WeakReference<RosterActivity>(a);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            RosterActivity ra = wa.get();
+            if (ra != null) {
+                ra.handleMessage(msg);
+            }
+        }
     }
 }
