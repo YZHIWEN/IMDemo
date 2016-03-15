@@ -8,7 +8,12 @@ import org.jivesoftware.smack.SASLAuthentication;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.XMPPException;
+import org.jivesoftware.smack.chat.Chat;
+import org.jivesoftware.smack.chat.ChatManager;
+import org.jivesoftware.smack.chat.ChatManagerListener;
+import org.jivesoftware.smack.chat.ChatMessageListener;
 import org.jivesoftware.smack.filter.StanzaFilter;
+import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.roster.Roster;
@@ -24,7 +29,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
-public class IMManger {
+public class IMManger implements ChatManagerListener, ChatMessageListener {
 
     private static final String TAG = IMManger.class.getName();
     private static IMManger imManger;
@@ -34,6 +39,7 @@ public class IMManger {
 
 
     private PresenceListener presenceListener;
+    private ChatListener chatListener;
 
     private IMManger() {
     }
@@ -47,6 +53,11 @@ public class IMManger {
 
     public void setPresenceListener(PresenceListener listener) {
         this.presenceListener = listener;
+    }
+
+    public void setChatListener(ChatListener lis) {
+        this.chatListener = lis;
+        ChatManager.getInstanceFor(conn).addChatListener(this);
     }
 
     public void setRosterListener(RosterListener listener) {
@@ -125,11 +136,15 @@ public class IMManger {
         }, new StanzaFilter() {
             @Override
             public boolean accept(Stanza stanza) {
+
+                Log.e(TAG, "accept: " + stanza.toString());
                 if (stanza instanceof Presence) {
                     Log.e(TAG, "accept: Presence");
                     return true;
+                } else if (stanza instanceof Message) {
+//                    Log.e(TAG, "accept: Message");
+//                    return true;
                 }
-                Log.e(TAG, "accept: Other");
                 return false;
             }
         });
@@ -186,6 +201,19 @@ public class IMManger {
                 Log.e(TAG, "presenceChanged: " + "Presence changed: " + presence.getFrom() + " " + presence);
             }
         });
+    }
+
+    public boolean send(final RosterEntry re, String msg) {
+        try {
+            Log.e(TAG, "send: name " + re.toString() + " user " + re.getUser() + " name " + re.getName());
+            ChatManager chatmanager = ChatManager.getInstanceFor(conn);
+            Chat newChat = chatmanager.createChat(re.getUser(), null);
+            newChat.sendMessage(msg);
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error Delivering block");
+            return false;
+        }
     }
 
     public boolean registerUser(String username, String pw) {
@@ -268,5 +296,21 @@ public class IMManger {
 
     public void disConnect() {
         // TODO: 2016/3/13 0013 other release
+        conn.disconnect();
+    }
+
+    @Override
+    public void chatCreated(Chat chat, boolean createdLocally) {
+        Log.e(TAG, "chatCreated: " + chat + " " + createdLocally);
+        if (createdLocally) {
+
+        } else {
+            chat.addMessageListener(this);
+        }
+    }
+
+    @Override
+    public void processMessage(Chat chat, Message message) {
+        chatListener.receviceChat(chat, message);
     }
 }

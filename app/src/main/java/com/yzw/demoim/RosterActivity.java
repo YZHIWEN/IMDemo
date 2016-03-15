@@ -17,13 +17,11 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
+import com.yzw.demoim.im.ChatListener;
 import com.yzw.demoim.im.IMManger;
 import com.yzw.demoim.im.PresenceListener;
 
 import org.jivesoftware.smack.chat.Chat;
-import org.jivesoftware.smack.chat.ChatManager;
-import org.jivesoftware.smack.chat.ChatManagerListener;
-import org.jivesoftware.smack.chat.ChatMessageListener;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.roster.RosterListener;
@@ -34,11 +32,11 @@ import java.util.List;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
+import butterknife.OnItemClick;
 import butterknife.OnItemLongClick;
-import butterknife.OnLongClick;
 
 public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuItemClickListener
-        , PresenceListener, RosterListener {
+        , PresenceListener, RosterListener, ChatListener {
 
 
     private static final String TAG = RosterActivity.class.getName();
@@ -47,10 +45,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     Toolbar toolbar;
     @Bind(R.id.listview)
     ListView listview;
-    //    @Bind(R.id.send)
-//    Button send;
-//    @Bind(R.id.send_to)
-//    EditText sendTo;
     private String ip = "192.168.23.1";
     private int port = 5222;
 
@@ -80,6 +74,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         imManger = IMManger.getInstance();
         imManger.setPresenceListener(this);
         imManger.setRosterListener(this);
+        imManger.setChatListener(this);
 
         progress_Dialog = new MaterialDialog.Builder(RosterActivity.this)
                 .content("请稍等")
@@ -154,20 +149,20 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         initContacts();
 
         // Assume we've created an XMPPConnection name "connection"._
-        ChatManager chatManager = ChatManager.getInstanceFor(imManger.conn);
-        chatManager.addChatListener(new ChatManagerListener() {
-            @Override
-            public void chatCreated(Chat chat, boolean createdLocally) {
-                Log.e(TAG, "chatCreated " + chat + " " + createdLocally);
-                if (!createdLocally)
-                    chat.addMessageListener(new ChatMessageListener() {
-                        @Override
-                        public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
-                            Log.e(TAG, "processMessage " + message);
-                        }
-                    });
-            }
-        });
+//        ChatManager chatManager = ChatManager.getInstanceFor(imManger.conn);
+//        chatManager.addChatListener(new ChatManagerListener() {
+//            @Override
+//            public void chatCreated(Chat chat, boolean createdLocally) {
+//                Log.e(TAG, "chatCreated " + chat + " " + createdLocally);
+//                if (!createdLocally)
+//                    chat.addMessageListener(new ChatMessageListener() {
+//                        @Override
+//                        public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
+//                            Log.e(TAG, "processMessage " + message);
+//                        }
+//                    });
+//            }
+//        });
     }
 
     private void initContacts() {
@@ -200,6 +195,21 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                     }
                 }).show();
         return true;
+    }
+
+    @OnItemClick(R.id.listview)
+    public void onItemClick(AdapterView<?> parent, View view, int position, final long id) {
+        final RosterEntry re = res.get(position);
+        new MaterialDialog.Builder(this)
+                .title("发送消息")
+                .positiveText("确认")
+                .customView(R.layout.input_box, true)
+                .onPositive(new MaterialDialog.SingleButtonCallback() {
+                    @Override
+                    public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
+                        imManger.send(re, ((EditText) dialog.findViewById(R.id.input_box)).getText().toString());
+                    }
+                }).show();
     }
 
 //    @OnClick(R.id.send)
@@ -315,20 +325,37 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     @Override
     public void entriesAdded(Collection<String> addresses) {
         Log.e(TAG, "entriesAdded: " + addresses.toString());
+        initContacts();
     }
 
     @Override
     public void entriesUpdated(Collection<String> addresses) {
         Log.e(TAG, "entriesUpdated: " + addresses.toString());
+        initContacts();
     }
 
     @Override
     public void entriesDeleted(Collection<String> addresses) {
         Log.e(TAG, "entriesDeleted: " + addresses.toString());
+        initContacts();
     }
 
     @Override
     public void presenceChanged(Presence presence) {
         Log.e(TAG, "presenceChanged: " + presence.toString());
+    }
+
+    @Override
+    public void receviceChat(Chat chat, final org.jivesoftware.smack.packet.Message message) {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                new MaterialDialog.Builder(RosterActivity.this)
+                        .title("收到来自" + message.getFrom() + "的消息")
+                        .content(message.getBody())
+                        .positiveText("确认")
+                        .show();
+            }
+        });
     }
 }
