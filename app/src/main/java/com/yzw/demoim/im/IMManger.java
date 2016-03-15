@@ -261,43 +261,48 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
      */
     public boolean addRoster(String userJid, String username, String[] groups) {
         // TODO: 2016/3/13 0013 先查好是否有改人。。。
-        // 下面代码添加好友失败
-
-//        try {
-//            Presence presencePacket = new Presence(Presence.Type.subscribe);
-//            presencePacket.setTo(userJid + "@topviewim");
-//            conn.sendStanza(presencePacket);
-//            return true;
-//        } catch (SmackException.NotConnectedException e) {
-//            e.printStackTrace();
-//            return false;
-//        }
-
         try {
             UserSearchManager userSearchManager = new UserSearchManager(conn);
             Form searchForm = userSearchManager.getSearchForm("search." + conn.getServiceName());
             Form answerForm = searchForm.createAnswerForm();
             answerForm.setAnswer("Username", true);
-            answerForm.setAnswer("search", userJid+ "@topviewim");//Here username must be added name replace by "amith"
+            answerForm.setAnswer("search", userJid);//Here username must be added name replace by "amith"
 
             ReportedData resultData = userSearchManager.getSearchResults(answerForm, "search." + conn.getServiceName());
 
+            if (resultData != null) {
+                List<ReportedData.Row> rows = resultData.getRows();
+                Iterator<ReportedData.Row> it = rows.iterator();
+                Log.e(TAG, "result data != null has next ?" + it.hasNext());
+                while (it.hasNext()) {
+                    ReportedData.Row row = it.next();
+                    List<String> values = row.getValues("jid");
+                    if (values != null)
+                        Log.e(TAG, "row jids  " + values.toString());
 
-            Iterator<ReportedData.Row> it = resultData.getRows().iterator();
-            ReportedData.Row row = null;
-            while (it.hasNext()) {
-                row = it.next();
-                String value = row.toString();
-                Log.i("It row values...", " " + value);
+                    List<String> vs = row.getValues("name");
+                    if (vs != null)
+                        Log.e(TAG, "row names " + vs.toString());
+                }
+            } else {
+                Log.e(TAG, "result data == null");
             }
-
-            Iterator<ReportedData.Column> cit = resultData.getColumns().iterator();
-            ReportedData.Column c = null;
-            while (it.hasNext()) {
-                c = cit.next();
-                String value = row.toString();
-                Log.i("It column values...", " " + value);
-            }
+//
+//            Iterator<ReportedData.Row> it = resultData.getRows().iterator();
+//            ReportedData.Row row = null;
+//            while (it.hasNext()) {
+//                row = it.next();
+//                String value = row.toString();
+//                Log.i("It row values...", " " + value);
+//            }
+//
+//            Iterator<ReportedData.Column> cit = resultData.getColumns().iterator();
+//            ReportedData.Column c = null;
+//            while (it.hasNext()) {
+//                c = cit.next();
+//                String value = row.toString();
+//                Log.i("It column values...", " " + value);
+//            }
         } catch (SmackException.NoResponseException e) {
             e.printStackTrace();
         } catch (XMPPException.XMPPErrorException e) {
@@ -323,6 +328,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
      * @param userJid
      * @return
      */
+
     public boolean deleteRoster(String userJid) {
         try {
             Log.e(TAG, "deleteRoster: " + userJid);
