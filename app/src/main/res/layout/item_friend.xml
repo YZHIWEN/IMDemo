@@ -8,6 +8,8 @@
     <TextView
         android:id="@+id/item_friend_tv"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:layout_margin="6dp"
+        android:gravity="center_vertical" />
 
 </LinearLayout>

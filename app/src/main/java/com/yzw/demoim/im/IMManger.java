@@ -37,8 +37,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
     private static final String TAG = IMManger.class.getName();
     private static IMManger imManger;
     public AbstractXMPPConnection conn;
-    private String ip = "192.168.23.1";
-    private int port = 5222;
+    private IMConfig imconfig;
 
 
     private PresenceListener presenceListener;
@@ -52,6 +51,10 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
             imManger = new IMManger();
         }
         return imManger;
+    }
+
+    public synchronized void init(IMConfig imconfig) {
+        this.imconfig = imconfig;
     }
 
     public void setPresenceListener(PresenceListener listener) {
@@ -76,10 +79,10 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
             XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
                     .setUsernameAndPassword(username, pw)
-                    .setServiceName(ip) // Must provide XMPP service name
-                    .setHost(ip)
+                    .setServiceName(imconfig.serviceName) // Must provide XMPP service name
+                    .setHost(imconfig.ip)
                     .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled) //
-                    .setPort(port)
+                    .setPort(imconfig.port)
                     .build();
 
             conn = new XMPPTCPConnection(config);
@@ -252,6 +255,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
     }
 
     /**
+     * 添加好友，需保证用户账号存在
      * add roster
      *
      * @param userJid
@@ -260,13 +264,30 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
      * @return
      */
     public boolean addRoster(String userJid, String username, String[] groups) {
-        // TODO: 2016/3/13 0013 先查好是否有改人。。。
+        try {
+            Roster roster = Roster.getInstanceFor(conn);
+            roster.createEntry(userJid + "@" + imconfig.serviceName, username, groups);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    /**
+     * 模糊查找 有关key 用户
+     *
+     * @param key
+     * @return
+     */
+    public List<String> searchUser(String key) {
+        List<String> res = new ArrayList<>();
         try {
             UserSearchManager userSearchManager = new UserSearchManager(conn);
             Form searchForm = userSearchManager.getSearchForm("search." + conn.getServiceName());
             Form answerForm = searchForm.createAnswerForm();
             answerForm.setAnswer("Username", true);
-            answerForm.setAnswer("search", userJid);//Here username must be added name replace by "amith"
+            answerForm.setAnswer("search", key);//Here username must be added name replace by "amith"
 
             ReportedData resultData = userSearchManager.getSearchResults(answerForm, "search." + conn.getServiceName());
 
@@ -279,47 +300,26 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
                     List<String> values = row.getValues("jid");
                     if (values != null)
                         Log.e(TAG, "row jids  " + values.toString());
-
                     List<String> vs = row.getValues("name");
                     if (vs != null)
                         Log.e(TAG, "row names " + vs.toString());
+
+                    for (String str : values) {
+                        // 需要加+ "@topviewim"，str是 "@topviewim"结尾
+                        int index = str.lastIndexOf("@" + imconfig.serviceName);
+                        String s = str.substring(0, index);
+                        Log.e(TAG, "searchUser: " + s);
+                        if (s.contains(key))
+                            res.add(s);
+                    }
                 }
             } else {
                 Log.e(TAG, "result data == null");
             }
-//
-//            Iterator<ReportedData.Row> it = resultData.getRows().iterator();
-//            ReportedData.Row row = null;
-//            while (it.hasNext()) {
-//                row = it.next();
-//                String value = row.toString();
-//                Log.i("It row values...", " " + value);
-//            }
-//
-//            Iterator<ReportedData.Column> cit = resultData.getColumns().iterator();
-//            ReportedData.Column c = null;
-//            while (it.hasNext()) {
-//                c = cit.next();
-//                String value = row.toString();
-//                Log.i("It column values...", " " + value);
-//            }
-        } catch (SmackException.NoResponseException e) {
-            e.printStackTrace();
-        } catch (XMPPException.XMPPErrorException e) {
-            e.printStackTrace();
-        } catch (SmackException.NotConnectedException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            Roster roster = Roster.getInstanceFor(conn);
-            roster.createEntry(userJid + "@topviewim", username, groups);
-            return true;
         } catch (Exception e) {
             e.printStackTrace();
-            return false;
         }
-
+        return res;
     }
 
     /**

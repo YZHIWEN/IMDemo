@@ -42,12 +42,11 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 
     private static final String TAG = RosterActivity.class.getName();
     private static final int SUBSCRIBE = 111;
+    private static final int SHOW_SERACH_FRIENDS = 222;
     @Bind(R.id.toolbar)
     Toolbar toolbar;
     @Bind(R.id.listview)
     ListView listview;
-    private String ip = "192.168.23.1";
-    private int port = 5222;
 
     private H handler;
 
@@ -117,7 +116,38 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                         })
                         .show();
                 break;
+            case SHOW_SERACH_FRIENDS:
+                final List<String> list = (List<String>) msg.obj;
+                new MaterialDialog.Builder(RosterActivity.this)
+                        .title("请选择要添加的好友")
+                        .adapter(
+                                new SearchFriendAdapter(RosterActivity.this, list, R.layout.item_friend),
+                                new MaterialDialog.ListCallback() {
+                                    @Override
+                                    public void onSelection(MaterialDialog dialog, View itemView, int which, CharSequence text) {
+                                        addFriend(list.get(which));
+                                        dialog.dismiss();
+                                    }
+                                })
+                        .show();
+                break;
         }
+    }
+
+    private void addFriend(final String s) {
+        new Thread() {
+            @Override
+            public void run() {
+                super.run();
+
+                handler.sendEmptyMessage(2);
+                boolean res = imManger.addRoster(s, null, null);
+                handler.sendMessage(Message.obtain(handler, 1, res));
+                handler.sendEmptyMessage(3);
+
+
+            }
+        }.start();
     }
 
     @Override
@@ -250,13 +280,13 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     public boolean onMenuItemClick(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.add_roster:
-                addRoster();
+                searchRoster();
                 break;
         }
         return true;
     }
 
-    private void addRoster() {
+    private void searchRoster() {
         boolean wrapInScrollView = true;
         new MaterialDialog.Builder(this)
                 .title("添加好友")
@@ -265,15 +295,14 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 .onPositive(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull final MaterialDialog dialog, @NonNull DialogAction which) {
-                        handler.sendEmptyMessage(2);
                         new Thread() {
                             @Override
                             public void run() {
+                                handler.sendEmptyMessage(2);
                                 EditText box = (EditText) dialog.getCustomView().findViewById(R.id.input_box);
                                 String username = box.getText().toString();
-
-                                boolean res = imManger.addRoster(username, null, null);
-                                handler.sendMessage(Message.obtain(handler, 1, res));
+                                List<String> list = imManger.searchUser(username);
+                                handler.sendMessage(Message.obtain(handler, SHOW_SERACH_FRIENDS, list));
                                 handler.sendEmptyMessage(3);
                             }
                         }.start();
