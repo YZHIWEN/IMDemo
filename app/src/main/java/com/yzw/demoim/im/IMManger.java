@@ -19,6 +19,7 @@ import org.jivesoftware.smack.packet.Stanza;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.roster.RosterListener;
+import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smackx.iqregister.AccountManager;
@@ -91,8 +92,6 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
             addRosterListener();
             addStanzaListener();
-
-
             return true;
         } catch (SmackException e) {
             e.printStackTrace();
@@ -138,7 +137,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
                         presenceListener.unsubscribe(p.getFrom());
                         break;
                     case subscribed:
-                        presenceListener.subscribed(p.getFrom());
+                        presenceListener.subscribed(p);
                         break;
                     case unsubscribed:
                         presenceListener.unsubscribed(p.getFrom());
@@ -151,7 +150,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
                 Log.e(TAG, "accept: " + stanza.toString());
                 if (stanza instanceof Presence) {
-                    Log.e(TAG, "accept: Presence");
+                    Log.e(TAG, "accept: Presence" + ((Presence) stanza).toString());
                     return true;
                 } else if (stanza instanceof Message) {
 //                    Log.e(TAG, "accept: Message");
@@ -160,6 +159,20 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
                 return false;
             }
         });
+
+        conn.addPacketSendingListener(new StanzaListener() {
+            @Override
+            public void processPacket(Stanza packet) throws SmackException.NotConnectedException {
+
+            }
+        }, new StanzaFilter() {
+            @Override
+            public boolean accept(Stanza stanza) {
+                Log.e(TAG, "accept:  send" + stanza.toString());
+                return false;
+            }
+        });
+
     }
 
     public boolean agreeSubscribe(Presence p) {
@@ -174,6 +187,22 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
             e.printStackTrace();
             return false;
         }
+    }
+
+    public boolean handlerReceiverSubscribed(Presence presence) {
+        Log.e(TAG, "handlerReceiverSubscribed: " + presence.toString());
+        List<RosterEntry> relist = getRosterEntrys();
+        for (RosterEntry re : relist) {
+            if (re.getUser().equals(presence.getFrom())) {
+                if (re.getType().equals(RosterPacket.ItemType.both)) {
+                    Log.e(TAG, "handlerReceiverSubscribed: return true");
+                    return true;
+                } else
+                    break;
+            }
+        }
+        Log.e(TAG, "handlerReceiverSubscribed: send");
+        return agreeSubscribe(presence);
     }
 
     public boolean disagreeSubscribe(Presence p) {
@@ -245,11 +274,17 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
         return Roster.getInstanceFor(conn);
     }
 
+    /**
+     * 只显示both关系
+     *
+     * @return
+     */
     public List<RosterEntry> getRosterEntrys() {
         List<RosterEntry> list = new ArrayList<>();
         Set<RosterEntry> sre = Roster.getInstanceFor(conn).getEntries();
         for (RosterEntry re : sre) {
-            list.add(re);
+            if (re.getType().equals(RosterPacket.ItemType.both))
+                list.add(re);
         }
         return list;
     }

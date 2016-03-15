@@ -84,8 +84,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 
             case SUBSCRIBE:
                 final Presence p = (Presence) msg.obj;
-
-
                 new MaterialDialog.Builder(RosterActivity.this)
                         .title("好友添加请求")
                         .positiveText("同意")
@@ -118,8 +116,9 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 break;
             case SHOW_SERACH_FRIENDS:
                 final List<String> list = (List<String>) msg.obj;
+                String titile = list.size() == 0 ? "用户不存在" : "请选择要添加的好友";
                 new MaterialDialog.Builder(RosterActivity.this)
-                        .title("请选择要添加的好友")
+                        .title(titile)
                         .adapter(
                                 new SearchFriendAdapter(RosterActivity.this, list, R.layout.item_friend),
                                 new MaterialDialog.ListCallback() {
@@ -160,6 +159,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         setSupportActionBar(toolbar);
         toolbar.setOnMenuItemClickListener(this);
 
+
         res = new ArrayList<>();
         adapter = new FriendAdapter(this, res, R.layout.item_friend);
         listview.setAdapter(adapter);
@@ -176,22 +176,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         handler = new H(this);
 
         initContacts();
-
-        // Assume we've created an XMPPConnection name "connection"._
-//        ChatManager chatManager = ChatManager.getInstanceFor(imManger.conn);
-//        chatManager.addChatListener(new ChatManagerListener() {
-//            @Override
-//            public void chatCreated(Chat chat, boolean createdLocally) {
-//                Log.e(TAG, "chatCreated " + chat + " " + createdLocally);
-//                if (!createdLocally)
-//                    chat.addMessageListener(new ChatMessageListener() {
-//                        @Override
-//                        public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
-//                            Log.e(TAG, "processMessage " + message);
-//                        }
-//                    });
-//            }
-//        });
     }
 
     private void initContacts() {
@@ -209,6 +193,21 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
             }
         }.start();
 
+        // Assume we've created an XMPPConnection name "connection"._
+//        ChatManager chatManager = ChatManager.getInstanceFor(imManger.conn);
+//        chatManager.addChatListener(new ChatManagerListener() {
+//            @Override
+//            public void chatCreated(Chat chat, boolean createdLocally) {
+//                Log.e(TAG, "chatCreated " + chat + " " + createdLocally);
+//                if (!createdLocally)
+//                    chat.addMessageListener(new ChatMessageListener() {
+//                        @Override
+//                        public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
+//                            Log.e(TAG, "processMessage " + message);
+//                        }
+//                    });
+//            }
+//        });
     }
 
     @OnItemLongClick(R.id.listview)
@@ -338,10 +337,15 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     }
 
     @Override
-    public void subscribed(String user) {
+    public void subscribed(final Presence presence) {
         handler.sendMessage(Message.obtain(handler, 4, "subscribed"));
-        Log.e(TAG, "subscribed: " + user);
-        initContacts();
+        Log.e(TAG, "subscribed: " + presence.toString());
+        new Thread(){
+            @Override
+            public void run() {
+                imManger.handlerReceiverSubscribed(presence);
+            }
+        }.start();
     }
 
     @Override
@@ -374,7 +378,9 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     @Override
     public void presenceChanged(Presence presence) {
         Log.e(TAG, "presenceChanged: " + presence.toString());
-        handler.sendMessage(Message.obtain(handler, 4, presence.getFrom() + " **presenceChanged** mode " + presence.getMode() + " type " + presence.getType()));
+        String user = presence.getFrom();
+        Presence bestPresence = imManger.getRoster().getPresence(user);
+        handler.sendMessage(Message.obtain(handler, 4, bestPresence.getFrom() + " **presenceChanged** mode " + bestPresence.getMode() + " type " + bestPresence.getType()));
     }
 
     // ------------------------------

@@ -21,7 +21,7 @@ public interface PresenceListener {
 
     void unsubscribe(String user);
 
-    void subscribed(String user);
+    void subscribed(Presence presence);
 
     void unsubscribed(String user);
 
