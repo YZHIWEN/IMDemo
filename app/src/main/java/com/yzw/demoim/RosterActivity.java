@@ -17,13 +17,13 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.yzw.demoim.im.ChatListener;
 import com.yzw.demoim.im.IMManger;
 import com.yzw.demoim.im.PresenceListener;
 
 import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.RosterEntry;
+import org.jivesoftware.smack.roster.RosterGroup;
 import org.jivesoftware.smack.roster.RosterListener;
 
 import java.lang.ref.WeakReference;
@@ -37,7 +37,7 @@ import butterknife.OnItemClick;
 import butterknife.OnItemLongClick;
 
 public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuItemClickListener
-        , PresenceListener, RosterListener, ChatListener {
+        , PresenceListener, RosterListener {
 
 
     private static final String TAG = RosterActivity.class.getName();
@@ -167,7 +167,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         imManger = IMManger.getInstance();
         imManger.setPresenceListener(this);
         imManger.setRosterListener(this);
-        imManger.setChatListener(this);
 
         progress_Dialog = new MaterialDialog.Builder(RosterActivity.this)
                 .content("请稍等")
@@ -190,6 +189,9 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                     Log.e(TAG, "re " + re.toString());
                 }
                 handler.sendEmptyMessage(5);
+
+                List<RosterGroup> rgs = imManger.getGroups();
+                Log.e(TAG, "groups info: " + rgs.toString());
             }
         }.start();
 
@@ -281,8 +283,42 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
             case R.id.add_roster:
                 searchRoster();
                 break;
+            case R.id.add_group:
+                addGroup();
+                break;
         }
         return true;
+    }
+
+    private void addGroup() {
+        new Thread() {
+            @Override
+            public void run() {
+                Log.e(TAG, "search group info :" + imManger.getGroups().toString());
+            }
+        }.start();
+        new MaterialDialog.Builder(RosterActivity.this)
+                .title("请输入分组名")
+                .customView(R.layout.input_box, true)
+                .positiveText("确认")
+                .negativeText("取消")
+                .onPositive(new MaterialDialog.SingleButtonCallback() {
+                    @Override
+                    public void onClick(@NonNull final MaterialDialog dialog, @NonNull DialogAction which) {
+                        dialog.dismiss();
+                        new Thread() {
+                            @Override
+                            public void run() {
+                                String name = ((EditText) dialog.findViewById(R.id.input_box)).getText().toString();
+                                boolean res = imManger.addGroup(name);
+                                String t;
+                                if (res) t = "创建成功";
+                                else t = "创建失败";
+                                handler.sendMessage(Message.obtain(handler, 1, t));
+                            }
+                        }.start();
+                    }
+                }).show();
     }
 
     private void searchRoster() {
@@ -340,7 +376,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     public void subscribed(final Presence presence) {
         handler.sendMessage(Message.obtain(handler, 4, "subscribed"));
         Log.e(TAG, "subscribed: " + presence.toString());
-        new Thread(){
+        new Thread() {
             @Override
             public void run() {
                 imManger.handlerReceiverSubscribed(presence);
@@ -384,19 +420,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     }
 
     // ------------------------------
-    @Override
-    public void receviceChat(Chat chat, final org.jivesoftware.smack.packet.Message message) {
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                new MaterialDialog.Builder(RosterActivity.this)
-                        .title("收到来自" + message.getFrom() + "的消息")
-                        .content(message.getBody())
-                        .positiveText("确认")
-                        .show();
-            }
-        });
-    }
 
     @Override
     protected void onDestroy() {

@@ -2,22 +2,26 @@ package com.yzw.demoim.im;
 
 import android.util.Log;
 
+import com.yzw.demoim.im.listener.IMChatListener;
+import com.yzw.demoim.im.listener.IMConnectionListener;
+
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
+import org.jivesoftware.smack.ReconnectionManager;
 import org.jivesoftware.smack.SASLAuthentication;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.chat.ChatManager;
-import org.jivesoftware.smack.chat.ChatManagerListener;
-import org.jivesoftware.smack.chat.ChatMessageListener;
 import org.jivesoftware.smack.filter.StanzaFilter;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.provider.ProviderManager;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
+import org.jivesoftware.smack.roster.RosterGroup;
 import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
@@ -26,15 +30,20 @@ import org.jivesoftware.smackx.iqregister.AccountManager;
 import org.jivesoftware.smackx.offline.OfflineMessageManager;
 import org.jivesoftware.smackx.search.ReportedData;
 import org.jivesoftware.smackx.search.UserSearchManager;
+import org.jivesoftware.smackx.vcardtemp.VCardManager;
+import org.jivesoftware.smackx.vcardtemp.packet.VCard;
+import org.jivesoftware.smackx.vcardtemp.provider.VCardProvider;
 import org.jivesoftware.smackx.xdata.Form;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-public class IMManger implements ChatManagerListener, ChatMessageListener {
+public class IMManger {
 
     private static final String TAG = IMManger.class.getName();
     private static IMManger imManger;
@@ -43,7 +52,7 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
 
     private PresenceListener presenceListener;
-    private ChatListener chatListener;
+    private IMChatListener chatListener;
 
     private IMManger() {
     }
@@ -63,9 +72,9 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
         this.presenceListener = listener;
     }
 
-    public void setChatListener(ChatListener lis) {
+    public void setChatListener(IMChatListener lis) {
         this.chatListener = lis;
-        ChatManager.getInstanceFor(conn).addChatListener(this);
+        ChatManager.getInstanceFor(conn).addChatListener(lis);
     }
 
     public void setRosterListener(RosterListener listener) {
@@ -86,7 +95,8 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
                     .setHost(imconfig.ip)
                     .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled) //
                     .setPort(imconfig.port)
-                    .setSendPresence(false); // 设置先不发送Presence 此时login后还是离线状态，获取离线消息后，再sendStanza 设置登录在线状态
+                    // 设置先不发送Presence 此时login后还是离线状态，获取离线消息后，再sendStanza 设置登录在线状态
+                    .setSendPresence(false);
 
 
             XMPPTCPConnectionConfiguration config = b.build();
@@ -98,9 +108,17 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
             OfflineMessageManager offlineManager = new OfflineMessageManager(conn);
             Log.e(TAG, "offline msg " + offlineManager.getMessageCount());
             Log.e(TAG, "offline msg " + offlineManager.getMessages());
+            // 记得最后要把离线消息删除，即通知服务器删除离线消息
+            offlineManager.deleteMessages();
 
             // 设置为在线状态
             conn.sendStanza(new Presence(Presence.Type.available));
+
+            // 设置断线重连
+            ReconnectionManager.getInstanceFor(conn).enableAutomaticReconnection();
+            conn.addConnectionListener(new IMConnectionListener());
+
+            setChatListener(new IMChatListener());
 
             addRosterListener();
             addStanzaListener();
@@ -301,6 +319,58 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
         return list;
     }
 
+
+    /**
+     * 获取所有分组
+     *
+     * @return
+     */
+    public List<RosterGroup> getGroups() {
+        List<RosterGroup> rgs = new ArrayList<>();
+        Roster roster = getRoster();
+        Collection<RosterGroup> groups = roster.getGroups();
+        for (RosterGroup rg : groups) {
+            rgs.add(rg);
+        }
+        return rgs;
+    }
+
+    /**
+     * 获取指定分组
+     *
+     * @param groupName
+     * @return
+     */
+    public RosterGroup getGroup(String groupName) {
+        return getRoster().getGroup(groupName);
+    }
+
+    /**
+     * 创建分组
+     * <p/>
+     * Note: you must add at least one entry to the group for the group to be kept
+     * after a logout/login. This is due to the way that XMPP stores group information.
+     *
+     * @param groupName
+     * @return
+     */
+    public boolean addGroup(String groupName) {
+        RosterGroup rg = getRoster().createGroup(groupName);
+        try {
+//            RosterEntry re = getRoster().getEntry("qq@" + imconfig.serviceName);
+//            if (re == null)
+//                Log.e(TAG, "addGroup: re  == null");
+//            else {
+//                Log.e(TAG, "addGroup: re = " + re.toString());
+//                getGroup(groupName).addEntry(re);
+//            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     /**
      * 添加好友，需保证用户账号存在
      * add roster
@@ -398,21 +468,137 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
 
     public void disConnect() {
         // TODO: 2016/3/13 0013 other release
+//        conn.remove listener
         conn.disconnect();
     }
 
-    @Override
-    public void chatCreated(Chat chat, boolean createdLocally) {
-        Log.e(TAG, "chatCreated: " + chat + " " + createdLocally);
-        if (createdLocally) {
-
-        } else {
-            chat.addMessageListener(this);
+    /**
+     * 更改用户状态
+     */
+    public void setPresence(int code) throws SmackException.NotConnectedException {
+        if (conn == null)
+            return;
+        Presence presence;
+        switch (code) {
+            case 0:
+                presence = new Presence(Presence.Type.available);
+                conn.sendStanza(presence);
+                Log.v("state", "设置在线");
+                break;
+            case 1:
+                presence = new Presence(Presence.Type.available);
+                presence.setMode(Presence.Mode.chat);
+                conn.sendStanza(presence);
+                Log.v("state", "设置Q我吧");
+                System.out.println(presence.toXML());
+                break;
+            case 2:
+                presence = new Presence(Presence.Type.available);
+                presence.setMode(Presence.Mode.dnd);
+                conn.sendStanza(presence);
+                Log.v("state", "设置忙碌");
+                System.out.println(presence.toXML());
+                break;
+            case 3:
+                presence = new Presence(Presence.Type.available);
+                presence.setMode(Presence.Mode.away);
+                conn.sendStanza(presence);
+                Log.v("state", "设置离开");
+                System.out.println(presence.toXML());
+                break;
+            case 4:
+                // TODO: 2016/3/16 0016
+                Roster roster = getRoster();
+                Collection<RosterEntry> entries = roster.getEntries();
+                for (RosterEntry entry : entries) {
+                    presence = new Presence(Presence.Type.unavailable);
+//                    presence.setPacketID(Packet.ID_NOT_AVAILABLE);
+                    presence.setFrom(conn.getUser());
+                    presence.setTo(entry.getUser());
+                    conn.sendPacket(presence);
+                    System.out.println(presence.toXML());
+                }
+                // 向同一用户的其他客户端发送隐身状态  
+                presence = new Presence(Presence.Type.unavailable);
+//                presence.setStanzaId(Packet.ID_NOT_AVAILABLE);
+                presence.setFrom(conn.getUser());
+                presence.setTo(conn.getUser());
+                conn.sendStanza(presence);
+                Log.v("state", "设置隐身");
+                break;
+            case 5:
+                presence = new Presence(Presence.Type.unavailable);
+                conn.sendStanza(presence);
+                Log.v("state", "设置离线");
+                break;
+            default:
+                break;
         }
     }
 
-    @Override
-    public void processMessage(Chat chat, Message message) {
-        chatListener.receviceChat(chat, message);
+    /**
+     * 获取用户VCard信息
+     *
+     * @param user
+     * @return
+     * @throws XMPPException
+     */
+    public VCard getUserVCard(String user)
+            throws XMPPException {
+        try {
+            VCardManager vm = VCardManager.getInstanceFor(conn);
+            return vm.loadVCard(user);
+        } catch (SmackException.NoResponseException e) {
+            e.printStackTrace();
+        } catch (SmackException.NotConnectedException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户头像信息
+     *
+     * @param user
+     * @return
+     */
+    public byte[] getUserImage(String user) {
+        ByteArrayInputStream bais = null;
+        try {
+            // 加入这句代码，解决No VCard for
+            ProviderManager.addIQProvider("vCard", "vcard-temp", new VCardProvider());
+            VCard vcard = getUserVCard(user);
+            if (vcard == null || vcard.getAvatar() == null)
+                return null;
+            return vcard.getAvatar();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 修改用户头像
+     *
+     * @throws XMPPException
+     * @throws IOException
+     */
+    public boolean changeImage(byte[] bytes)
+            throws XMPPException, IOException {
+        try {
+            VCard vcard = getUserVCard(conn.getUser());
+
+            String encodedImage = new String(bytes);
+            vcard.setAvatar(bytes, encodedImage);
+            vcard.setField("PHOTO", "<TYPE>image/jpg</TYPE><BINVAL>" + encodedImage
+                    + "</BINVAL>", true);
+            VCardManager.getInstanceFor(conn).saveVCard(vcard);
+            return true;
+        } catch (SmackException.NoResponseException e) {
+            e.printStackTrace();
+        } catch (SmackException.NotConnectedException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }
