@@ -11,7 +11,7 @@ import com.yzw.demoim.im.IMManger;
 public class IApplication extends Application {
 
     IMConfig imConfig;
-    String ip = "192.168.23.1";
+    String ip = "192.168.191.1";
     int port = 5222;
     String servicename = "topviewim";
 

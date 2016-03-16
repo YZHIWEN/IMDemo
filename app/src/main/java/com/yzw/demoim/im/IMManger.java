@@ -23,6 +23,7 @@ import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.jivesoftware.smackx.iqregister.AccountManager;
+import org.jivesoftware.smackx.offline.OfflineMessageManager;
 import org.jivesoftware.smackx.search.ReportedData;
 import org.jivesoftware.smackx.search.UserSearchManager;
 import org.jivesoftware.smackx.xdata.Form;
@@ -78,17 +79,28 @@ public class IMManger implements ChatManagerListener, ChatMessageListener {
             SASLAuthentication.unBlacklistSASLMechanism("PLAIN");
             SASLAuthentication.blacklistSASLMechanism("DIGEST-MD5");
 
-            XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
+
+            XMPPTCPConnectionConfiguration.Builder b = XMPPTCPConnectionConfiguration.builder()
                     .setUsernameAndPassword(username, pw)
                     .setServiceName(imconfig.serviceName) // Must provide XMPP service name
                     .setHost(imconfig.ip)
                     .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled) //
                     .setPort(imconfig.port)
-                    .build();
+                    .setSendPresence(false); // 设置先不发送Presence 此时login后还是离线状态，获取离线消息后，再sendStanza 设置登录在线状态
 
+
+            XMPPTCPConnectionConfiguration config = b.build();
             conn = new XMPPTCPConnection(config);
             conn.connect();
             conn.login();
+
+            // 离线消息
+            OfflineMessageManager offlineManager = new OfflineMessageManager(conn);
+            Log.e(TAG, "offline msg " + offlineManager.getMessageCount());
+            Log.e(TAG, "offline msg " + offlineManager.getMessages());
+
+            // 设置为在线状态
+            conn.sendStanza(new Presence(Presence.Type.available));
 
             addRosterListener();
             addStanzaListener();
