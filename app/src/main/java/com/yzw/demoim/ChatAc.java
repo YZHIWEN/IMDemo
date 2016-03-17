@@ -71,7 +71,7 @@ public class ChatAc extends BaseAc {
     @Override
     protected void onPause() {
         super.onPause();
-        eb.unregister(this);
+        EventBus.getDefault().unregister(this);
     }
 
     @OnClick(R.id.send)
