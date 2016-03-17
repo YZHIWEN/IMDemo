@@ -1,5 +1,6 @@
 package com.yzw.demoim;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -17,13 +18,12 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
+import com.yzw.demoim.bean.Friend;
+import com.yzw.demoim.im.IMAdpter;
 import com.yzw.demoim.im.IMManger;
 import com.yzw.demoim.im.PresenceListener;
 
-import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.packet.Presence;
-import org.jivesoftware.smack.roster.RosterEntry;
-import org.jivesoftware.smack.roster.RosterGroup;
 import org.jivesoftware.smack.roster.RosterListener;
 
 import java.lang.ref.WeakReference;
@@ -52,7 +52,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 
     private MaterialDialog progress_Dialog;
 
-    private List<RosterEntry> res;
+    private List<Friend> fs;
     private FriendAdapter adapter;
 
     private IMManger imManger;
@@ -160,8 +160,8 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         toolbar.setOnMenuItemClickListener(this);
 
 
-        res = new ArrayList<>();
-        adapter = new FriendAdapter(this, res, R.layout.item_friend);
+        fs = new ArrayList<>();
+        adapter = new FriendAdapter(this, fs, R.layout.item_friend);
         listview.setAdapter(adapter);
 
         imManger = IMManger.getInstance();
@@ -182,34 +182,12 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
             @Override
             public void run() {
                 imManger = IMManger.getInstance();
-                res.clear();
-                res.addAll(imManger.getRosterEntrys());
-                Log.e(TAG, "res size " + res.size());
-                for (RosterEntry re : res) {
-                    Log.e(TAG, "re " + re.toString());
-                }
+                IMAdpter imAdpter = new IMAdpter(imManger);
+                fs.clear();
+                fs.addAll(imAdpter.getFriends());
                 handler.sendEmptyMessage(5);
-
-                List<RosterGroup> rgs = imManger.getGroups();
-                Log.e(TAG, "groups info: " + rgs.toString());
             }
         }.start();
-
-        // Assume we've created an XMPPConnection name "connection"._
-//        ChatManager chatManager = ChatManager.getInstanceFor(imManger.conn);
-//        chatManager.addChatListener(new ChatManagerListener() {
-//            @Override
-//            public void chatCreated(Chat chat, boolean createdLocally) {
-//                Log.e(TAG, "chatCreated " + chat + " " + createdLocally);
-//                if (!createdLocally)
-//                    chat.addMessageListener(new ChatMessageListener() {
-//                        @Override
-//                        public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
-//                            Log.e(TAG, "processMessage " + message);
-//                        }
-//                    });
-//            }
-//        });
     }
 
     @OnItemLongClick(R.id.listview)
@@ -222,7 +200,7 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 .onPositive(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                        imManger.deleteRoster(res.get((int) id));
+                        imManger.deleteRoster(fs.get((int) id).getUsername());
                     }
                 }).show();
         return true;
@@ -230,17 +208,10 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 
     @OnItemClick(R.id.listview)
     public void onItemClick(AdapterView<?> parent, View view, int position, final long id) {
-        final RosterEntry re = res.get(position);
-        new MaterialDialog.Builder(this)
-                .title("发送消息")
-                .positiveText("确认")
-                .customView(R.layout.input_box, true)
-                .onPositive(new MaterialDialog.SingleButtonCallback() {
-                    @Override
-                    public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                        imManger.send(re, ((EditText) dialog.findViewById(R.id.input_box)).getText().toString());
-                    }
-                }).show();
+        Friend re = fs.get(position);
+        Intent intent = new Intent(this, ChatAc.class);
+        intent.putExtra(Friend.class.getName(), re);
+        startActivity(intent);
     }
 
     @Override
@@ -248,34 +219,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         getMenuInflater().inflate(R.menu.roster_menu, menu);
         return true;
     }
-
-//    @OnClick(R.id.send)
-//    public void send(View view) {
-//        new Thread() {
-//            @Override
-//            public void run() {
-//                // Assume we've created an XMPPConnection name "connection"._
-//                ChatManager chatmanager = ChatManager.getInstanceFor(imManger.conn);
-//                Chat newChat = chatmanager.createChat(sendTo.getText().toString() + "@topviewim", new ChatMessageListener() {
-//                    @Override
-//                    public void processMessage(Chat chat, org.jivesoftware.smack.packet.Message message) {
-//                        try {
-//                            chat.sendMessage(message.getBody());
-//                        } catch (SmackException.NotConnectedException e) {
-//                            e.printStackTrace();
-//                        }
-//                        Log.e(TAG, "Received message: " + message);
-//                    }
-//                });
-//
-//                try {
-//                    newChat.sendMessage("Howdy!" + imManger.conn.getUser());
-//                } catch (Exception e) {
-//                    Log.e(TAG, "Error Delivering block");
-//                }
-//            }
-//        }.start();
-//    }
 
     @Override
     public boolean onMenuItemClick(MenuItem item) {

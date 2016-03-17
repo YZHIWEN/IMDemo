@@ -259,11 +259,11 @@ public class IMManger {
         roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
     }
 
-    public boolean send(final RosterEntry re, String msg) {
+    public boolean send(String userJid, String msg) {
         try {
-            Log.e(TAG, "send: name " + re.toString() + " user " + re.getUser() + " name " + re.getName());
+            Log.e(TAG, "send: name " + userJid);
             ChatManager chatmanager = ChatManager.getInstanceFor(conn);
-            Chat newChat = chatmanager.createChat(re.getUser(), null);
+            Chat newChat = chatmanager.createChat(userJid, null);
             newChat.sendMessage(msg);
             return true;
         } catch (Exception e) {

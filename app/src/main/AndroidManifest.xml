@@ -18,10 +18,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".RosterActivity"></activity>
-
-
-        <service android:name=".im.IMService" />
+        <activity android:name=".RosterActivity" />
+        <activity android:name=".ChatAc"></activity>
     </application>
 
 </manifest>
