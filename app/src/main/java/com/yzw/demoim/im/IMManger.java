@@ -4,6 +4,7 @@ import android.util.Log;
 
 import com.yzw.demoim.im.listener.IMChatListener;
 import com.yzw.demoim.im.listener.IMConnectionListener;
+import com.yzw.demoim.im.listener.IMFileListener;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
@@ -26,6 +27,8 @@ import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
+import org.jivesoftware.smackx.filetransfer.FileTransferManager;
+import org.jivesoftware.smackx.filetransfer.OutgoingFileTransfer;
 import org.jivesoftware.smackx.iqregister.AccountManager;
 import org.jivesoftware.smackx.offline.OfflineMessageManager;
 import org.jivesoftware.smackx.search.ReportedData;
@@ -36,6 +39,7 @@ import org.jivesoftware.smackx.vcardtemp.provider.VCardProvider;
 import org.jivesoftware.smackx.xdata.Form;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -117,6 +121,9 @@ public class IMManger {
             // 设置断线重连
             ReconnectionManager.getInstanceFor(conn).enableAutomaticReconnection();
             conn.addConnectionListener(new IMConnectionListener());
+
+            // 文件监听
+            FileTransferManager.getInstanceFor(conn).addFileTransferListener(new IMFileListener());
 
             setChatListener(new IMChatListener());
 
@@ -600,5 +607,26 @@ public class IMManger {
             e.printStackTrace();
         }
         return false;
+    }
+
+    public boolean sendFile(String userjid, File file, String desc) {
+        try {
+            FileTransferManager ftm = FileTransferManager.getInstanceFor(conn);
+            Log.e(TAG, "sendFile: " + conn.getUser());
+            Log.e(TAG, "sendFile: " + userjid);
+            OutgoingFileTransfer oft = ftm.createOutgoingFileTransfer(userjid + "/Smack");
+            oft.sendFile(file, desc);
+            while (!oft.isDone()) {
+                Log.e(TAG, "sendFile: status : " + oft.getStatus());
+                Log.e(TAG, "sendFile: progress : " + oft.getProgress());
+            }
+
+            Log.e(TAG, "sendFile: status : " + oft.getStatus());
+            Log.e(TAG, "sendFile: progress : " + oft.getProgress());
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }
