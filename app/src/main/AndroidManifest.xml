@@ -23,6 +23,7 @@
         </activity>
         <activity android:name=".RosterActivity" />
         <activity android:name=".ChatAc"></activity>
+        <service android:name=".im.IMService"/>
     </application>
 
 </manifest>

@@ -16,11 +16,13 @@ public class IApplication extends Application {
     String ip = "192.168.191.1";
     int port = 5222;
     String servicename = "topviewim";
+    public static Application iApplication;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
+        iApplication = this;
         initConfig();
         startIMServcie();
     }

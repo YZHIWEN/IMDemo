@@ -1,7 +1,11 @@
 package com.yzw.demoim.im.listener;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
+import com.afollestad.materialdialogs.MaterialDialog;
+import com.yzw.demoim.IApplication;
 import com.yzw.demoim.bean.ChatMessage;
 
 import org.greenrobot.eventbus.EventBus;
@@ -29,7 +33,7 @@ public class IMChatListener implements ChatManagerListener {
         Log.d(TAG, "chatCreated: chat messagelistener size " + chat.getListeners().size());
         chat.addMessageListener(new ChatMessageListener() {
             @Override
-            public void processMessage(Chat chat, Message message) {
+            public void processMessage(Chat chat, final Message message) {
                 Log.d(TAG, "processMessage: chat " + chat.toString() + " message " + message.toString());
 
                 ChatMessage cm = new ChatMessage();
@@ -37,16 +41,6 @@ public class IMChatListener implements ChatManagerListener {
                 cm.setFrom(message.getFrom());
                 cm.setType(ChatMessage.Type.RECEIVE);
                 eb.post(cm);
-//                handler.post(new Runnable() {
-//                    @Override
-//                    public void run() {
-//                        new MaterialDialog.Builder(RosterActivity.this)
-//                                .title("收到来自" + message.getFrom() + "的消息")
-//                                .content(message.getBody())
-//                                .positiveText("确认")
-//                                .show();
-//                    }
-//                });
             }
         });
     }

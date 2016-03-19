@@ -5,6 +5,9 @@ import android.util.Log;
 import com.yzw.demoim.im.listener.IMChatListener;
 import com.yzw.demoim.im.listener.IMConnectionListener;
 import com.yzw.demoim.im.listener.IMFileListener;
+import com.yzw.demoim.im.listener.IMPresenceListener;
+import com.yzw.demoim.im.listener.IMRosterListener;
+import com.yzw.demoim.im.listener.PresenceListener;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
@@ -23,7 +26,6 @@ import org.jivesoftware.smack.provider.ProviderManager;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smack.roster.RosterGroup;
-import org.jivesoftware.smack.roster.RosterListener;
 import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
@@ -47,7 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-public class IMManger {
+public class IMManger implements IMListener {
 
     private static final String TAG = IMManger.class.getName();
     private static IMManger imManger;
@@ -56,7 +58,6 @@ public class IMManger {
 
 
     private PresenceListener presenceListener;
-    private IMChatListener chatListener;
 
     private IMManger() {
     }
@@ -72,20 +73,7 @@ public class IMManger {
         this.imconfig = imconfig;
     }
 
-    public void setPresenceListener(PresenceListener listener) {
-        this.presenceListener = listener;
-    }
-
-    public void setChatListener(IMChatListener lis) {
-        this.chatListener = lis;
-        ChatManager.getInstanceFor(conn).addChatListener(lis);
-    }
-
-    public void setRosterListener(RosterListener listener) {
-        Roster roster = Roster.getInstanceFor(conn);
-        roster.addRosterListener(listener);
-    }
-
+    @Override
     public boolean login(String username, String pw) {
         try {
             // 添加SASL验证 ， 否则会报错并且登录失败
@@ -125,7 +113,15 @@ public class IMManger {
             // 文件监听
             FileTransferManager.getInstanceFor(conn).addFileTransferListener(new IMFileListener());
 
-            setChatListener(new IMChatListener());
+            //
+            ChatManager.getInstanceFor(conn).addChatListener(new IMChatListener());
+
+            //
+            presenceListener = new IMPresenceListener();
+
+            //
+            Roster roster = Roster.getInstanceFor(conn);
+            roster.addRosterListener(new IMRosterListener());
 
             addRosterListener();
             addStanzaListener();
@@ -140,7 +136,79 @@ public class IMManger {
             e.printStackTrace();
             return false;
         }
+    }
 
+    @Override
+    public boolean logout() {
+        if (conn != null)
+            conn.disconnect();
+        return true;
+    }
+
+    @Override
+    public boolean register(String user, String pw) {
+        return false;
+    }
+
+    @Override
+    public List<String> search(String key) {
+        List<String> res = new ArrayList<>();
+        try {
+            UserSearchManager userSearchManager = new UserSearchManager(conn);
+            Form searchForm = userSearchManager.getSearchForm("search." + conn.getServiceName());
+            Form answerForm = searchForm.createAnswerForm();
+            answerForm.setAnswer("Username", true);
+            answerForm.setAnswer("search", key);//Here username must be added name replace by "amith"
+
+            ReportedData resultData = userSearchManager.getSearchResults(answerForm, "search." + conn.getServiceName());
+
+            if (resultData != null) {
+                List<ReportedData.Row> rows = resultData.getRows();
+                Iterator<ReportedData.Row> it = rows.iterator();
+                Log.e(TAG, "result data != null has next ?" + it.hasNext());
+                while (it.hasNext()) {
+                    ReportedData.Row row = it.next();
+                    List<String> values = row.getValues("jid");
+                    if (values != null)
+                        Log.e(TAG, "row jids  " + values.toString());
+                    List<String> vs = row.getValues("name");
+                    if (vs != null)
+                        Log.e(TAG, "row names " + vs.toString());
+
+                    for (String str : values) {
+                        // 需要加+ "@topviewim"，str是 "@topviewim"结尾
+                        int index = str.lastIndexOf("@" + imconfig.serviceName);
+                        String s = str.substring(0, index);
+                        Log.e(TAG, "searchUser: " + s);
+                        if (s.contains(key))
+                            res.add(s);
+                    }
+                }
+            } else {
+                Log.e(TAG, "result data == null");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return res;
+    }
+
+    /**
+     * 添加好友，需保证用户账号存在 -- 无分组
+     *
+     * @param user
+     * @return
+     */
+    @Override
+    public boolean addRoster(String user) {
+        try {
+            Roster roster = Roster.getInstanceFor(conn);
+            roster.createEntry(user + "@" + imconfig.serviceName, user, null);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
     private void addStanzaListener() {
@@ -152,12 +220,6 @@ public class IMManger {
                 Log.e(TAG, "StanzaListener: type " + p.getType() + " mode " + p.getMode());
                 Log.e(TAG, "StanzaListener: presence " + p.toString());
                 switch (p.getType()) {
-                    case available:
-//                        presenceListener.available(p.getFrom());
-                        break;
-                    case unavailable:
-//                        presenceListener.unavailable(p.getFrom());
-                        break;
                     case subscribe:
                         // 如何 接收和拒绝 ？？
 
@@ -212,7 +274,21 @@ public class IMManger {
 
     }
 
+    @Override
     public boolean agreeSubscribe(Presence p) {
+        Log.e(TAG, "handlerReceiverSubscribed: " + p.toString());
+        List<RosterEntry> relist = getRosterEntrys();
+        for (RosterEntry re : relist) {
+            if (re.getUser().equals(p.getFrom())) {
+                if (re.getType().equals(RosterPacket.ItemType.both)) {
+                    Log.e(TAG, "handlerReceiverSubscribed: return true");
+                    return true;
+                } else
+                    break;
+            }
+        }
+        Log.e(TAG, "handlerReceiverSubscribed: send");
+
         try {
             Log.e(TAG, "send subscribed agreeSubscribe");
             Presence np = new Presence(Presence.Type.subscribed);
@@ -226,22 +302,7 @@ public class IMManger {
         }
     }
 
-    public boolean handlerReceiverSubscribed(Presence presence) {
-        Log.e(TAG, "handlerReceiverSubscribed: " + presence.toString());
-        List<RosterEntry> relist = getRosterEntrys();
-        for (RosterEntry re : relist) {
-            if (re.getUser().equals(presence.getFrom())) {
-                if (re.getType().equals(RosterPacket.ItemType.both)) {
-                    Log.e(TAG, "handlerReceiverSubscribed: return true");
-                    return true;
-                } else
-                    break;
-            }
-        }
-        Log.e(TAG, "handlerReceiverSubscribed: send");
-        return agreeSubscribe(presence);
-    }
-
+    @Override
     public boolean disagreeSubscribe(Presence p) {
         try {
             Presence np = new Presence(Presence.Type.unsubscribe);
@@ -250,6 +311,42 @@ public class IMManger {
             conn.sendStanza(np);
             return true;
         } catch (SmackException.NotConnectedException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public boolean sendMessage(String user, String msg) {
+        try {
+            Log.e(TAG, "send: name " + user);
+            ChatManager chatmanager = ChatManager.getInstanceFor(conn);
+//            Chat newChat = chatmanager.createChat(user + "@" + imconfig.serviceName, null);
+            Chat newChat = chatmanager.createChat(user, null);
+            newChat.sendMessage(msg);
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error Delivering block");
+            return false;
+        }
+    }
+
+    @Override
+    public boolean sendFile(String user, File file) {
+        try {
+            FileTransferManager ftm = FileTransferManager.getInstanceFor(conn);
+            Log.e(TAG, "sendFile: " + conn.getUser());
+            Log.e(TAG, "sendFile: " + user);
+            OutgoingFileTransfer oft = ftm.createOutgoingFileTransfer(user + "@" + imconfig.serviceName + "/Smack");
+            oft.sendFile(file, null); // desc
+            while (!oft.isDone()) {
+                Log.e(TAG, "sendFile: status : " + oft.getStatus());
+                Log.e(TAG, "sendFile: progress : " + oft.getProgress());
+            }
+            Log.e(TAG, "sendFile: status : " + oft.getStatus());
+            Log.e(TAG, "sendFile: progress : " + oft.getProgress());
+            return true;
+        } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
@@ -266,19 +363,6 @@ public class IMManger {
         roster.setSubscriptionMode(Roster.SubscriptionMode.manual);
     }
 
-    public boolean send(String userJid, String msg) {
-        try {
-            Log.e(TAG, "send: name " + userJid);
-            ChatManager chatmanager = ChatManager.getInstanceFor(conn);
-            Chat newChat = chatmanager.createChat(userJid, null);
-            newChat.sendMessage(msg);
-            return true;
-        } catch (Exception e) {
-            System.out.println("Error Delivering block");
-            return false;
-        }
-    }
-
     public boolean registerUser(String username, String pw) {
         try {
             AccountManager am = AccountManager.getInstance(conn);
@@ -290,23 +374,6 @@ public class IMManger {
         }
     }
 
-    public boolean deleteRoster(RosterEntry re) {
-        try {
-            Log.e(TAG, "deleteRoster: " + re.toString());
-            Roster roster = Roster.getInstanceFor(conn);
-            roster.removeEntry(re);
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-
-    public boolean hideLogin(String username, String pw) {
-        return false;
-    }
-
     public Roster getRoster() {
         return Roster.getInstanceFor(conn);
     }
@@ -316,6 +383,7 @@ public class IMManger {
      *
      * @return
      */
+    @Override
     public List<RosterEntry> getRosterEntrys() {
         List<RosterEntry> list = new ArrayList<>();
         Set<RosterEntry> sre = Roster.getInstanceFor(conn).getEntries();
@@ -379,85 +447,18 @@ public class IMManger {
     }
 
     /**
-     * 添加好友，需保证用户账号存在
-     * add roster
-     *
-     * @param userJid
-     * @param username
-     * @param groups
-     * @return
-     */
-    public boolean addRoster(String userJid, String username, String[] groups) {
-        try {
-            Roster roster = Roster.getInstanceFor(conn);
-            roster.createEntry(userJid + "@" + imconfig.serviceName, username, groups);
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-
-    /**
-     * 模糊查找 有关key 用户
-     *
-     * @param key
-     * @return
-     */
-    public List<String> searchUser(String key) {
-        List<String> res = new ArrayList<>();
-        try {
-            UserSearchManager userSearchManager = new UserSearchManager(conn);
-            Form searchForm = userSearchManager.getSearchForm("search." + conn.getServiceName());
-            Form answerForm = searchForm.createAnswerForm();
-            answerForm.setAnswer("Username", true);
-            answerForm.setAnswer("search", key);//Here username must be added name replace by "amith"
-
-            ReportedData resultData = userSearchManager.getSearchResults(answerForm, "search." + conn.getServiceName());
-
-            if (resultData != null) {
-                List<ReportedData.Row> rows = resultData.getRows();
-                Iterator<ReportedData.Row> it = rows.iterator();
-                Log.e(TAG, "result data != null has next ?" + it.hasNext());
-                while (it.hasNext()) {
-                    ReportedData.Row row = it.next();
-                    List<String> values = row.getValues("jid");
-                    if (values != null)
-                        Log.e(TAG, "row jids  " + values.toString());
-                    List<String> vs = row.getValues("name");
-                    if (vs != null)
-                        Log.e(TAG, "row names " + vs.toString());
-
-                    for (String str : values) {
-                        // 需要加+ "@topviewim"，str是 "@topviewim"结尾
-                        int index = str.lastIndexOf("@" + imconfig.serviceName);
-                        String s = str.substring(0, index);
-                        Log.e(TAG, "searchUser: " + s);
-                        if (s.contains(key))
-                            res.add(s);
-                    }
-                }
-            } else {
-                Log.e(TAG, "result data == null");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return res;
-    }
-
-    /**
      * delete roster
      *
-     * @param userJid
+     * @param user
      * @return
      */
-
-    public boolean deleteRoster(String userJid) {
+    @Override
+    public boolean deleteRoster(String user) {
         try {
-            Log.e(TAG, "deleteRoster: " + userJid);
+            Log.e(TAG, "deleteRoster: " + user);
             Roster r = Roster.getInstanceFor(conn);
-            RosterEntry re = r.getEntry(userJid);
+//            RosterEntry re = r.getEntry(user + "@" + imconfig.serviceName);
+            RosterEntry re = r.getEntry(user);
             if (re != null)
                 r.removeEntry(re);
             return true;
@@ -465,11 +466,6 @@ public class IMManger {
             e.printStackTrace();
             return false;
         }
-    }
-
-    // TODO: 2016/3/13 0013 think image vedio file
-    public boolean sendMessage(String userJid, final String msg) {
-        return false;
     }
 
 
@@ -607,26 +603,5 @@ public class IMManger {
             e.printStackTrace();
         }
         return false;
-    }
-
-    public boolean sendFile(String userjid, File file, String desc) {
-        try {
-            FileTransferManager ftm = FileTransferManager.getInstanceFor(conn);
-            Log.e(TAG, "sendFile: " + conn.getUser());
-            Log.e(TAG, "sendFile: " + userjid);
-            OutgoingFileTransfer oft = ftm.createOutgoingFileTransfer(userjid + "/Smack");
-            oft.sendFile(file, desc);
-            while (!oft.isDone()) {
-                Log.e(TAG, "sendFile: status : " + oft.getStatus());
-                Log.e(TAG, "sendFile: progress : " + oft.getProgress());
-            }
-
-            Log.e(TAG, "sendFile: status : " + oft.getStatus());
-            Log.e(TAG, "sendFile: progress : " + oft.getProgress());
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
     }
 }

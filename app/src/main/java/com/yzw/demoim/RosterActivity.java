@@ -2,12 +2,9 @@ package com.yzw.demoim;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -18,17 +15,12 @@ import android.widget.Toast;
 
 import com.afollestad.materialdialogs.DialogAction;
 import com.afollestad.materialdialogs.MaterialDialog;
-import com.yzw.demoim.bean.Friend;
-import com.yzw.demoim.im.IMAdpter;
-import com.yzw.demoim.im.IMManger;
-import com.yzw.demoim.im.PresenceListener;
+import com.yzw.demoim.im.IMBaseActivity;
 
 import org.jivesoftware.smack.packet.Presence;
-import org.jivesoftware.smack.roster.RosterListener;
+import org.jivesoftware.smack.roster.RosterEntry;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import butterknife.Bind;
@@ -36,8 +28,7 @@ import butterknife.ButterKnife;
 import butterknife.OnItemClick;
 import butterknife.OnItemLongClick;
 
-public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuItemClickListener
-        , PresenceListener, RosterListener {
+public class RosterActivity extends IMBaseActivity implements Toolbar.OnMenuItemClickListener {
 
 
     private static final String TAG = RosterActivity.class.getName();
@@ -48,40 +39,34 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     @Bind(R.id.listview)
     ListView listview;
 
-    private H handler;
+    private Her handler;
 
     private MaterialDialog progress_Dialog;
 
-    private List<Friend> fs;
+    private List<RosterEntry> fs;
     private FriendAdapter adapter;
-
-    private IMManger imManger;
 
     public void handleMessage(Message msg) {
         switch (msg.what) {
             case 1:
                 Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
                 break;
-
             case 2:
                 if (!progress_Dialog.isShowing()) {
                     progress_Dialog.show();
                 }
                 break;
-
             case 3:
                 if (progress_Dialog.isShowing()) {
                     progress_Dialog.dismiss();
                 }
                 break;
-
             case 4:
                 Toast.makeText(RosterActivity.this, msg.obj + "", Toast.LENGTH_SHORT).show();
                 break;
             case 5:
                 adapter.notifyDataSetChanged();
                 break;
-
             case SUBSCRIBE:
                 final Presence p = (Presence) msg.obj;
                 new MaterialDialog.Builder(RosterActivity.this)
@@ -95,7 +80,8 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                                     @Override
                                     public void run() {
                                         super.run();
-                                        imManger.agreeSubscribe(p);
+                                        if (mImServiceBinder != null)
+                                            mImServiceBinder.agreeSubscribe(p);
                                     }
                                 }.start();
                             }
@@ -107,7 +93,8 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                                     @Override
                                     public void run() {
                                         super.run();
-                                        imManger.disagreeSubscribe(p);
+                                        if (mImServiceBinder != null)
+                                            mImServiceBinder.disagreeSubscribe(p);
                                     }
                                 }.start();
                             }
@@ -138,12 +125,14 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
             @Override
             public void run() {
                 super.run();
+                if (mImServiceBinder != null) {
 
-                handler.sendEmptyMessage(2);
-                boolean res = imManger.addRoster(s, null, null);
-                handler.sendMessage(Message.obtain(handler, 1, res));
-                handler.sendEmptyMessage(3);
+                    handler.sendEmptyMessage(2);
+                    boolean res = mImServiceBinder.addRoster(s);
+                    handler.sendMessage(Message.obtain(handler, 1, res));
+                    handler.sendEmptyMessage(3);
 
+                }
 
             }
         }.start();
@@ -164,15 +153,11 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         adapter = new FriendAdapter(this, fs, R.layout.item_friend);
         listview.setAdapter(adapter);
 
-        imManger = IMManger.getInstance();
-        imManger.setPresenceListener(this);
-        imManger.setRosterListener(this);
-
         progress_Dialog = new MaterialDialog.Builder(RosterActivity.this)
                 .content("请稍等")
                 .progress(true, 0).build();
 
-        handler = new H(this);
+        handler = new Her(this);
 
         initContacts();
     }
@@ -181,10 +166,10 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
         new Thread() {
             @Override
             public void run() {
-                imManger = IMManger.getInstance();
-                IMAdpter imAdpter = new IMAdpter(imManger);
+                if (mImServiceBinder == null)
+                    return;
                 fs.clear();
-                fs.addAll(imAdpter.getFriends());
+                fs.addAll(mImServiceBinder.getRosterEntrys());
                 handler.sendEmptyMessage(5);
             }
         }.start();
@@ -200,7 +185,8 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                 .onPositive(new MaterialDialog.SingleButtonCallback() {
                     @Override
                     public void onClick(@NonNull MaterialDialog dialog, @NonNull DialogAction which) {
-                        imManger.deleteRoster(fs.get((int) id).getUsername());
+                        if (mImServiceBinder != null)
+                            mImServiceBinder.deleteRoster(fs.get((int) id).getUser());
                     }
                 }).show();
         return true;
@@ -208,9 +194,9 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
 
     @OnItemClick(R.id.listview)
     public void onItemClick(AdapterView<?> parent, View view, int position, final long id) {
-        Friend re = fs.get(position);
+        RosterEntry re = fs.get(position);
         Intent intent = new Intent(this, ChatAc.class);
-        intent.putExtra(Friend.class.getName(), re);
+        intent.putExtra("username", re.getUser());
         startActivity(intent);
     }
 
@@ -234,12 +220,6 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     }
 
     private void addGroup() {
-        new Thread() {
-            @Override
-            public void run() {
-                Log.e(TAG, "search group info :" + imManger.getGroups().toString());
-            }
-        }.start();
         new MaterialDialog.Builder(RosterActivity.this)
                 .title("请输入分组名")
                 .customView(R.layout.input_box, true)
@@ -252,12 +232,14 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                         new Thread() {
                             @Override
                             public void run() {
-                                String name = ((EditText) dialog.findViewById(R.id.input_box)).getText().toString();
-                                boolean res = imManger.addGroup(name);
-                                String t;
-                                if (res) t = "创建成功";
-                                else t = "创建失败";
-                                handler.sendMessage(Message.obtain(handler, 1, t));
+                                if (mImServiceBinder == null)
+                                    return;
+//                                String name = ((EditText) dialog.findViewById(R.id.input_box)).getText().toString();
+//                                boolean res = mImServiceBinder.addGroup(name);
+//                                String t;
+//                                if (res) t = "创建成功";
+//                                else t = "创建失败";
+//                                handler.sendMessage(Message.obtain(handler, 1, t));
                             }
                         }.start();
                     }
@@ -276,10 +258,13 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
                         new Thread() {
                             @Override
                             public void run() {
+                                if (mImServiceBinder == null)
+                                    return;
+
                                 handler.sendEmptyMessage(2);
                                 EditText box = (EditText) dialog.getCustomView().findViewById(R.id.input_box);
                                 String username = box.getText().toString();
-                                List<String> list = imManger.searchUser(username);
+                                List<String> list = mImServiceBinder.search(username);
                                 handler.sendMessage(Message.obtain(handler, SHOW_SERACH_FRIENDS, list));
                                 handler.sendEmptyMessage(3);
                             }
@@ -290,100 +275,9 @@ public class RosterActivity extends AppCompatActivity implements Toolbar.OnMenuI
     }
 
     @Override
-    public void available(String user) {
-        handler.sendMessage(Message.obtain(handler, 4, "available"));
-        Log.e(TAG, "available: " + user);
-    }
-
-    @Override
-    public void unavailable(String user) {
-        handler.sendMessage(Message.obtain(handler, 4, "unavailable"));
-        Log.e(TAG, "unavailable: " + user);
-    }
-
-    @Override
-    public boolean subscribe(Presence presence) {
-        handler.sendMessage(Message.obtain(handler, 4, "subscribe"));
-        Log.e(TAG, " show dialog subscribe: " + presence.toString());
-        handler.sendMessage(Message.obtain(handler, SUBSCRIBE, presence));
-        return true;
-    }
-
-    @Override
-    public void unsubscribe(String user) {
-        handler.sendMessage(Message.obtain(handler, 4, "unsubscribe"));
-        Log.e(TAG, "unsubscribe: " + user);
-    }
-
-    @Override
-    public void subscribed(final Presence presence) {
-        handler.sendMessage(Message.obtain(handler, 4, "subscribed"));
-        Log.e(TAG, "subscribed: " + presence.toString());
-        new Thread() {
-            @Override
-            public void run() {
-                imManger.handlerReceiverSubscribed(presence);
-            }
-        }.start();
-    }
-
-    @Override
-    public void unsubscribed(String user) {
-        handler.sendMessage(Message.obtain(handler, 4, "unsubscribed"));
-        Log.e(TAG, "unsubscribed: " + user);
-        imManger.deleteRoster(user);
-    }
-
-    @Override
-    public void entriesAdded(Collection<String> addresses) {
-        Log.e(TAG, "entriesAdded: " + addresses.toString());
-        initContacts();
-    }
-
-    // ------------------------------
-
-    @Override
-    public void entriesUpdated(Collection<String> addresses) {
-        Log.e(TAG, "entriesUpdated: " + addresses.toString());
-        initContacts();
-    }
-
-    @Override
-    public void entriesDeleted(Collection<String> addresses) {
-        Log.e(TAG, "entriesDeleted: " + addresses.toString());
-        initContacts();
-    }
-
-    @Override
-    public void presenceChanged(Presence presence) {
-        Log.e(TAG, "presenceChanged: " + presence.toString());
-        String user = presence.getFrom();
-        Presence bestPresence = imManger.getRoster().getPresence(user);
-        handler.sendMessage(Message.obtain(handler, 4, bestPresence.getFrom() + " **presenceChanged** mode " + bestPresence.getMode() + " type " + bestPresence.getType()));
-    }
-
-    // ------------------------------
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
-        imManger.disConnect();
-    }
-
-    class H extends Handler {
-        private WeakReference<RosterActivity> wa;
-
-        public H(RosterActivity a) {
-            this.wa = new WeakReference<RosterActivity>(a);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            RosterActivity ra = wa.get();
-            if (ra != null) {
-                ra.handleMessage(msg);
-            }
-        }
+        if (mImServiceBinder != null)
+            mImServiceBinder.logout();
     }
 }

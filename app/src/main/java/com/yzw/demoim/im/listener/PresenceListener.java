@@ -1,4 +1,4 @@
-package com.yzw.demoim.im;
+package com.yzw.demoim.im.listener;
 
 import org.jivesoftware.smack.packet.Presence;
 
@@ -6,10 +6,6 @@ import org.jivesoftware.smack.packet.Presence;
  * Created by yzw on 2016/3/14 0014.
  */
 public interface PresenceListener {
-
-    void available(String user);
-
-    void unavailable(String user);
 
     /**
      * 返回是否接受

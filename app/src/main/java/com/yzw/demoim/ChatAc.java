@@ -18,15 +18,13 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import com.yzw.demoim.bean.ChatMessage;
-import com.yzw.demoim.bean.Friend;
-import com.yzw.demoim.im.IMManger;
+import com.yzw.demoim.im.IMBaseActivity;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.jivesoftware.smackx.filetransfer.FileTransferRequest;
 import org.jivesoftware.smackx.filetransfer.IncomingFileTransfer;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -37,7 +35,7 @@ import butterknife.Bind;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
-public class ChatAc extends BaseAc {
+public class ChatAc extends IMBaseActivity {
 
     private final static int FILE_CHOICE_CODE = 1111;
     @Bind(R.id.toolbar)
@@ -52,8 +50,7 @@ public class ChatAc extends BaseAc {
     LinearLayout bottomLayout;
     @Bind(R.id.listview)
     ListView listview;
-    private Friend friend;
-    private IMManger imManger;
+    private String username;
     private Her her;
     private EventBus eb;
     private List<ChatMessage> cmsglist;
@@ -65,9 +62,8 @@ public class ChatAc extends BaseAc {
         setContentView(R.layout.activity_chat);
         ButterKnife.bind(this);
 
-        friend = (Friend) getIntent().getSerializableExtra(Friend.class.getName());
+        username =  getIntent().getStringExtra("username");
 
-        imManger = IMManger.getInstance();
         her = new Her(this);
         cmsglist = new ArrayList<>();
         adpter = new ChatAdapter(this, cmsglist);
@@ -77,13 +73,12 @@ public class ChatAc extends BaseAc {
     @Override
     protected void onResume() {
         super.onResume();
-        // TODO: 2016/3/17 0017 需要读取接收不到信息 ？？？？？
         EventBus.getDefault().register(this);
     }
 
     @Override
-    protected void onPause() {
-        super.onPause();
+    protected void onStop() {
+        super.onStop();
         EventBus.getDefault().unregister(this);
     }
 
@@ -95,14 +90,16 @@ public class ChatAc extends BaseAc {
         new Thread() {
             @Override
             public void run() {
+                if (mImServiceBinder == null)
+                    return;
 
                 ChatMessage cm = new ChatMessage();
                 cm.setBody(c);
                 cm.setType(ChatMessage.Type.SEND);
-                cm.setFrom(friend.getUsername());
+                cm.setFrom(username);
                 cmsglist.add(cm);
                 her.sendEmptyMessage(3);
-                boolean res = imManger.send(friend.getUsername(), c);
+                boolean res = mImServiceBinder.sendMessage(username, c);
                 if (res)
                     her.sendEmptyMessage(1);
                 else
@@ -157,17 +154,20 @@ public class ChatAc extends BaseAc {
         new Thread() {
             @Override
             public void run() {
+                if (mImServiceBinder == null)
+                    return;
+
                 File file = new File(filepath);
                 if (!file.exists())
                     file.mkdir();
                 Log.e(TAG, "run: " + file.toString() + " " + file.canRead() + " " + file.exists());
-                imManger.sendFile(friend.getUsername(), file, "");
+                mImServiceBinder.sendFile(username, file);
             }
         }.start();
     }
 
     @Override
-    public void handlerMessage(Message msg) {
+    public void handleMessage(Message msg) {
         switch (msg.what) {
             case 1:
                 Toast.makeText(this, "发送成功", Toast.LENGTH_SHORT).show();
@@ -199,7 +199,6 @@ public class ChatAc extends BaseAc {
             @Override
             public void run() {
                 try {
-
                     IncomingFileTransfer ift = request.accept();
                     InputStream in = ift.recieveFile();
                     File sdCard = Environment.getExternalStorageDirectory();
