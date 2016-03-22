@@ -1,11 +1,7 @@
 package com.yzw.demoim.im.listener;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
-import com.afollestad.materialdialogs.MaterialDialog;
-import com.yzw.demoim.IApplication;
 import com.yzw.demoim.bean.ChatMessage;
 
 import org.greenrobot.eventbus.EventBus;

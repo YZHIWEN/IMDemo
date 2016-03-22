@@ -2,15 +2,13 @@ package com.yzw.demoim.im;
 
 import android.util.Log;
 
-import com.yzw.demoim.im.listener.IMChatListener;
-import com.yzw.demoim.im.listener.IMConnectionListener;
-import com.yzw.demoim.im.listener.IMFileListener;
 import com.yzw.demoim.im.listener.IMPresenceListener;
 import com.yzw.demoim.im.listener.IMRosterListener;
 import com.yzw.demoim.im.listener.PresenceListener;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
+import org.jivesoftware.smack.ConnectionListener;
 import org.jivesoftware.smack.ReconnectionManager;
 import org.jivesoftware.smack.SASLAuthentication;
 import org.jivesoftware.smack.SmackException;
@@ -18,6 +16,7 @@ import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.chat.ChatManager;
+import org.jivesoftware.smack.chat.ChatManagerListener;
 import org.jivesoftware.smack.filter.StanzaFilter;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.Presence;
@@ -29,6 +28,7 @@ import org.jivesoftware.smack.roster.RosterGroup;
 import org.jivesoftware.smack.roster.packet.RosterPacket;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
 import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
+import org.jivesoftware.smackx.filetransfer.FileTransferListener;
 import org.jivesoftware.smackx.filetransfer.FileTransferManager;
 import org.jivesoftware.smackx.filetransfer.OutgoingFileTransfer;
 import org.jivesoftware.smackx.iqregister.AccountManager;
@@ -106,16 +106,6 @@ public class IMManger implements IMListener {
             // 设置为在线状态
             conn.sendStanza(new Presence(Presence.Type.available));
 
-            // 设置断线重连
-            ReconnectionManager.getInstanceFor(conn).enableAutomaticReconnection();
-            conn.addConnectionListener(new IMConnectionListener());
-
-            // 文件监听
-            FileTransferManager.getInstanceFor(conn).addFileTransferListener(new IMFileListener());
-
-            //
-            ChatManager.getInstanceFor(conn).addChatListener(new IMChatListener());
-
             //
             presenceListener = new IMPresenceListener();
 
@@ -136,6 +126,33 @@ public class IMManger implements IMListener {
             e.printStackTrace();
             return false;
         }
+    }
+
+    /**
+     * @param listener
+     */
+    public void setConnListener(ConnectionListener listener) {
+        // 设置断线重连
+        ReconnectionManager.getInstanceFor(conn).enableAutomaticReconnection();
+        conn.addConnectionListener(listener);
+    }
+
+    /**
+     * 消息监听
+     *
+     * @param listener
+     */
+    public void setChatListener(ChatManagerListener listener) {
+        ChatManager.getInstanceFor(conn).addChatListener(listener);
+    }
+
+    /**
+     * 文件监听
+     *
+     * @param listener
+     */
+    public void setIMFileListener(FileTransferListener listener) {
+        FileTransferManager.getInstanceFor(conn).addFileTransferListener(listener);
     }
 
     @Override

@@ -12,18 +12,23 @@ import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 
+import com.yzw.demoim.im.callback.IMCallBack;
+
+import org.jivesoftware.smackx.filetransfer.FileTransferRequest;
+
 import java.lang.ref.WeakReference;
 
 /**
  * Created by yzw on 2016/3/19 0019.
  */
-public class IMBaseActivity extends AppCompatActivity {
+public class IMBaseActivity extends AppCompatActivity implements IMCallBack {
     public static final String TAG = "Base Activity";
     protected IMService.IMBinder mImServiceBinder;
     private ServiceConnection serviceconn = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             mImServiceBinder = (IMService.IMBinder) service;
+            mImServiceBinder.setCallback(IMBaseActivity.this);
         }
 
         @Override
@@ -56,6 +61,16 @@ public class IMBaseActivity extends AppCompatActivity {
     private void bindIMService() {
         Intent intent = new Intent(IMBaseActivity.this, IMService.class);
         bindService(intent, serviceconn, Service.BIND_AUTO_CREATE);
+    }
+
+    @Override
+    public void receive(String user, String msg) {
+        Log.e(TAG, "receive: from " + user + " " + msg);
+    }
+
+    @Override
+    public void receive(String user, FileTransferRequest request) {
+        Log.e(TAG, "receive: file from " + user);
     }
 
 
